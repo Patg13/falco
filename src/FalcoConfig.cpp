@@ -35,7 +35,7 @@ using std::runtime_error;
 using std::istringstream;
 using std::cerr;
 
-const string FalcoConfig::FalcoVersion = "1.2.1";
+const string FalcoConfig::FalcoVersion = "1.2.1_MTT";
 
 /*********************************************************/
 /************** DEFAULT VALUES FOR FILES *****************/
@@ -279,8 +279,8 @@ file_exists(const std::string& name) {
 // variable, and files are not read properly
 // if these bytes are not removed
 void
-clean_zero_bytes(string &filename) {
-  filename.erase(std::remove(begin(filename), end(filename), '\0'), end(filename));
+clean_zero_bytes(string &file) {
+  file.erase(std::remove(begin(file), end(file), '\0'), end(file));
 }
 
 // Check if a std::string ends with another,
@@ -319,6 +319,7 @@ FalcoConfig::FalcoConfig(const int argc, const char **argv) {
   read_step = 1;
   format = "";
   threads = 1;
+  trim_value_3p = 0;
   contaminants_file = string(PROGRAM_PATH) + "/Configuration/contaminant_list.txt";
   adapters_file = string(PROGRAM_PATH) + "/Configuration/adapter_list.txt";
   limits_file = string(PROGRAM_PATH) + "/Configuration/limits.txt";

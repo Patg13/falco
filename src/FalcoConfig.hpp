@@ -45,6 +45,7 @@ struct FalcoConfig {
   bool quiet;
   size_t read_step;  // only process reads that are multiple of read_step
   size_t threads;  // number of threads to read multiple files in parallel
+  size_t trim_value_3p; // Stop reading sequence/quality stream when reaching this read position
   std::string call; // the function call
   std::string format;  // force file format
   std::string contaminants_file;  // custom contaminants file

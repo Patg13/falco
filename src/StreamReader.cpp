@@ -109,11 +109,12 @@ StreamReader::StreamReader(FalcoConfig &config,
   //We need to set mask as all 64 bits 1 => use SIZE_MAX in this case
   adapter_mask(adapter_size == 32? SIZE_MAX: (1ull << (2*adapter_size)) - 1),
   adapters(make_adapters(config.adapter_hashes)),
+  trim_value_3p(config.trim_value_3p),
   filename(config.filename)
   {
 
   // Allocates buffer to temporarily store reads
-  buffer = new char[buffer_size + 1]; // +1 for the \0
+  buffer = new char[buffer_size];
   buffer[buffer_size] = '\0';
 
   // duplication init
@@ -393,6 +394,10 @@ StreamReader::read_sequence_line(FastqStats &stats) {
   /********** THIS LOOP MUST BE ALWAYS OPTIMIZED ***********/
   /*********************************************************/
   for (; *cur_char != field_separator; ++cur_char, ++read_pos) {
+    // Patg13 modification to stop the stream when reaching a certain positon (new trim option)
+    if (trim_value_3p != 0 && read_pos >= trim_value_3p){
+        break;
+    }
     // if we reached the buffer size, stop using it and start using leftover
     if (read_pos == buffer_size) {
       still_in_buffer = false;
@@ -494,6 +499,10 @@ StreamReader::read_quality_line(FastqStats &stats) {
   for (; (*cur_char != field_separator) &&
          (*cur_char != line_separator) &&
          !is_eof(); ++cur_char) {
+    // Patg13 modification to stop the stream when reaching a certain positon (new trim option)
+    if (trim_value_3p != 0 && read_pos >= trim_value_3p){
+       break;
+    }
 
     if (read_pos == buffer_size) {
       still_in_buffer = false;
@@ -637,7 +646,7 @@ FastqReader::is_eof() {
 }
 
 FastqReader::~FastqReader() {
-  delete[] filebuf;
+  free(filebuf);
   fclose(fileobj);
 }
 
@@ -709,7 +718,7 @@ GzFastqReader::is_eof() {
 }
 
 GzFastqReader::~GzFastqReader() {
-  delete[] gzbuf;
+  free(gzbuf);
   gzclose_r(fileobj);
 }
 
@@ -822,7 +831,7 @@ SamReader::read_entry(FastqStats &stats, size_t &num_bytes_read) {
 }
 
 SamReader::~SamReader() {
-  delete[] filebuf;
+  free(filebuf);
   fclose(fileobj);
 }
 

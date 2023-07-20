@@ -65,6 +65,9 @@ class StreamReader{
   // buffer size to store line 2 of each read statically
   const size_t buffer_size;
   const size_t read_step;
+  
+  // Stop reading stream when reaching this read positon
+  const size_t trim_value_3p;
   // the number of colons (:) needed to be seen until we know we are in a tile
   const size_t tile_split_point;
 

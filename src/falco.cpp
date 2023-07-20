@@ -25,6 +25,7 @@
 #include "StreamReader.hpp"
 #include "HtmlMaker.hpp"
 #include "Module.hpp"
+#include <thread>
 
 using std::string;
 using std::runtime_error;
@@ -36,6 +37,7 @@ using std::ifstream;
 using std::ofstream;
 using std::ostream;
 using std::to_string;
+using std::thread;
 
 using std::chrono::system_clock;
 using std::chrono::duration_cast;
@@ -326,6 +328,170 @@ file_exists(const string &file_name) {
   return (access(file_name.c_str(), F_OK) == 0);
 }
 
+// Basic struct to pass falco option which are not in falco_config to the threads
+// Probably not the best way to do this, but it works...
+// Include them in the falco_config object is probably a better idea...
+struct args_struct {
+     string outdir_arg;
+     bool skip_text_arg;
+     bool skip_html_arg;
+     bool skip_short_summary_arg;
+     bool do_call_arg;
+};
+
+// Function to prepare balanced chunks of files for the threads
+std::vector<std::vector<std::string>> 
+makeChunks(const std::vector<std::string>& filenames, size_t numChunks) {
+    // Calculate the average number of filenames per chunk
+    int averagePerChunk = filenames.size() / numChunks;
+    // Calculate the number of chunks that will have one additional filename
+    int extraChunks = filenames.size() % numChunks;
+    std::vector<std::vector<std::string>> chunks;
+    int currentIndex = 0;
+    for (int chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
+        int chunkSize = averagePerChunk;
+        // Distribute the additional filenames across the chunks
+        if (chunkIndex < extraChunks) {
+            chunkSize++;
+        }
+        std::vector<std::string> chunk;
+        for (int i = 0; i < chunkSize; i++) {
+            chunk.push_back(filenames[currentIndex]);
+            currentIndex++;
+        }
+        chunks.push_back(chunk);
+    }
+    return chunks;
+}
+
+
+
+// File Processing function for multithreading support
+// Taken from main section 
+
+// TODO Need to implement error handling inside the function and a error report inside the main
+// Note that the FalcoConfig MUST be passed by value to prevent race condition between the threads
+void 
+processFile(FalcoConfig falco_config, const std::vector<std::string> &chunk, struct args_struct args) {
+
+       // As we are running in multithread, the custom output name are not supported
+       // forced_file_format don't have to be overridden, but as there is no error handling
+       // it is better to not risk it for now
+       string data_filename = "";
+       string report_filename = "";
+       string summary_filename = "";
+       string forced_file_format;
+
+       // Could replace these by just calling args. in the rest of the function
+       // But I'm lazy and I don't want to risk forgetting something
+       // I'll change it later... maybe...
+       const bool skip_text = args.skip_text_arg;
+       const bool skip_html = args.skip_html_arg;
+       const bool skip_short_summary = args.skip_short_summary_arg;
+       const bool do_call = args.do_call_arg;
+       const string outdir = args.outdir_arg;
+       
+
+for (const auto &filename : chunk) {
+
+      const time_point file_start_time = system_clock::now();
+
+      falco_config.filename = filename;
+
+      // if format was not provided, we have to guess it by the filename
+      falco_config.format = forced_file_format;
+
+      /****************** BEGIN PROCESSING CONFIG ******************/
+      // define file type, read limits, adapters, contaminants and fail
+      // early if any of the required files is not present
+      //
+      falco_config.setup();
+
+      /****************** END PROCESSING CONFIG *******************/
+      if (!falco_config.quiet)
+        log_process("Started reading file " + falco_config.filename);
+      FastqStats stats; // allocate all space to summarize data
+
+      // Initializes a reader given the file format
+      if (falco_config.is_sam) {
+        if (!falco_config.quiet)
+          log_process("reading file as SAM format");
+        SamReader in(falco_config, stats.SHORT_READ_THRESHOLD);
+        read_stream_into_stats(in, stats, falco_config);
+      }
+#ifdef USE_HTS
+      else if (falco_config.is_bam) {
+        if (!falco_config.quiet)
+          log_process("reading file as BAM format");
+        BamReader in(falco_config, stats.SHORT_READ_THRESHOLD);
+        read_stream_into_stats(in, stats, falco_config);
+      }
+#endif
+
+      else if (falco_config.is_fastq_gz) {
+        if (!falco_config.quiet)
+          log_process("reading file as gzipped FASTQ format");
+        GzFastqReader in(falco_config, stats.SHORT_READ_THRESHOLD);
+        read_stream_into_stats(in,stats,falco_config);
+      }
+      else if (falco_config.is_fastq) {
+        if (!falco_config.quiet)
+          log_process("reading file as uncompressed FASTQ format");
+        FastqReader in(falco_config, stats.SHORT_READ_THRESHOLD);
+        read_stream_into_stats(in, stats, falco_config);
+      }
+      else {
+        throw runtime_error("Cannot recognize file format for file "
+                            + falco_config.filename);
+      }
+
+      if (!falco_config.quiet) {
+        log_process("Finished reading file");
+      }
+
+      stats.summarize();
+
+       // if oudir is empty we will set it as the filename path
+      string cur_outdir;
+      string file_basename;
+      if (outdir.empty()) {
+        const size_t last_slash_idx = filename.rfind('/');
+        // if file was given with relative path in the current dir, we set a dot
+        if (last_slash_idx == string::npos) {
+          cur_outdir = ".";
+          file_basename = filename;
+        }
+        else {
+          cur_outdir = falco_config.filename.substr(0, last_slash_idx);
+          file_basename = falco_config.filename.substr(last_slash_idx + 1);
+        }
+      }
+      else {
+        cur_outdir = outdir;
+      }
+
+      // Write results
+//      const string file_prefix = (all_seq_filenames.size() == 1) ?
+//                                 ("") : (file_basename + "_");
+      const string file_prefix = file_basename + "_";
+      write_results(falco_config, stats, skip_text, skip_html,
+                   skip_short_summary, do_call, file_prefix, cur_outdir,
+                   summary_filename, data_filename, report_filename);
+
+      /************************** TIME SUMMARY *****************************/
+      if (!falco_config.quiet)
+        cerr << "Elapsed time for file " << filename << ": "
+             << get_seconds_since(file_start_time) << "s" << endl;
+    }
+//  }
+  //catch (const runtime_error &e) {
+  //  cerr << e.what() << endl;
+  //  return EXIT_FAILURE;
+  // }
+  //return EXIT_SUCCESS;
+}
+
+
 int main(int argc, const char **argv) {
 
   try {
@@ -453,7 +619,6 @@ int main(int argc, const char **argv) {
         , false, forced_file_format);
 
     opt_parse.add_opt("-threads", 't',
-        "[NOT YET IMPLEMENTED IN FALCO] "
         "Specifies the number of files which can be processed "
         "simultaneously.  Each thread will be allocated 250MB of "
         "memory so you shouldn't run more threads than your "
@@ -511,7 +676,12 @@ int main(int argc, const char **argv) {
     // use single-characters that do not overlap with the
     // ones used in FastQC, so cannot use:
     // h, v, o, j, f, t, c, a, l, k, q, d
-
+    opt_parse.add_opt("trim-seqs", 'm',
+        "[Falco only] Trim sequences on the 3'end before processing "
+        "This can be useful to reduce false positives occurences "
+        "for some modules (as the end of Illumina reads are often "
+        "low quality and will trigger FAIL event "
+        , false, falco_config.trim_value_3p);
 
     opt_parse.add_opt("subsample", 's',
         "[Falco only] makes falco faster "
@@ -639,6 +809,7 @@ int main(int argc, const char **argv) {
         }
       }
     }
+
     const vector<string> all_seq_filenames(leftover_args);
 
     // check if all filenames exist
@@ -654,102 +825,75 @@ int main(int argc, const char **argv) {
       throw runtime_error("not all input files exist. Check stderr for detailed list"
                           " of files that were not found");
     }
+     
+     // args_struct will be passed to processFile function so it include non falco_config options
+     struct args_struct argpass_struct;
+     argpass_struct.skip_text_arg = skip_text;
+     argpass_struct.skip_html_arg = skip_html;
+     argpass_struct.skip_short_summary_arg = skip_short_summary;
+     argpass_struct.do_call_arg = do_call;
+     argpass_struct.outdir_arg = outdir;
 
     /****************** END COMMAND LINE OPTIONS ********************/
-    for (const auto &filename : all_seq_filenames) {
+    // Command-line argument parsing as before...
 
-      const time_point file_start_time = system_clock::now();
 
-      falco_config.filename = filename;
-
-      // if format was not provided, we have to guess it by the filename
-      falco_config.format = forced_file_format;
-
-      /****************** BEGIN PROCESSING CONFIG ******************/
-      // define file type, read limits, adapters, contaminants and fail
-      // early if any of the required files is not present
-      //
-      falco_config.setup();
-
-      /****************** END PROCESSING CONFIG *******************/
-      if (!falco_config.quiet)
-        log_process("Started reading file " + falco_config.filename);
-      FastqStats stats; // allocate all space to summarize data
-
-      // Initializes a reader given the file format
-      if (falco_config.is_sam) {
-        if (!falco_config.quiet)
-          log_process("reading file as SAM format");
-        SamReader in(falco_config, stats.SHORT_READ_THRESHOLD);
-        read_stream_into_stats(in, stats, falco_config);
-      }
-#ifdef USE_HTS
-      else if (falco_config.is_bam) {
-        if (!falco_config.quiet)
-          log_process("reading file as BAM format");
-        BamReader in(falco_config, stats.SHORT_READ_THRESHOLD);
-        read_stream_into_stats(in, stats, falco_config);
-      }
-#endif
-
-      else if (falco_config.is_fastq_gz) {
-        if (!falco_config.quiet)
-          log_process("reading file as gzipped FASTQ format");
-        GzFastqReader in(falco_config, stats.SHORT_READ_THRESHOLD);
-        read_stream_into_stats(in,stats,falco_config);
-      }
-      else if (falco_config.is_fastq) {
-        if (!falco_config.quiet)
-          log_process("reading file as uncompressed FASTQ format");
-        FastqReader in(falco_config, stats.SHORT_READ_THRESHOLD);
-        read_stream_into_stats(in, stats, falco_config);
-      }
-      else {
-        throw runtime_error("Cannot recognize file format for file "
-                            + falco_config.filename);
-      }
-
-      if (!falco_config.quiet) {
-        log_process("Finished reading file");
-      }
-
-      stats.summarize();
-
-      // if oudir is empty we will set it as the filename path
-      string cur_outdir;
-
-      const size_t last_slash_idx = filename.rfind('/');
-      string file_basename = falco_config.filename.substr(last_slash_idx + 1);
-      if (outdir.empty()) {
-        // if file was given with relative path in the current dir, we set a dot
-        if (last_slash_idx == string::npos) {
-          cur_outdir = ".";
-          file_basename = filename;
-        }
-        else {
-          cur_outdir = falco_config.filename.substr(0, last_slash_idx);
-        }
-      }
-      else {
-        cur_outdir = outdir;
-      }
-
-      // Write results
-      const string file_prefix = (all_seq_filenames.size() == 1) ?
-                                 ("") : (file_basename + "_");
-      write_results(falco_config, stats, skip_text, skip_html,
-                   skip_short_summary, do_call, file_prefix, cur_outdir,
-                   summary_filename, data_filename, report_filename);
-
-      /************************** TIME SUMMARY *****************************/
-      if (!falco_config.quiet)
-        cerr << "Elapsed time for file " << filename << ": "
-             << get_seconds_since(file_start_time) << "s" << endl;
+    // to prevent empty chunks, threads will be adjusted to number of samples
+    if ( falco_config.threads > all_seq_filenames.size() ){
+        cerr << "[WARNING] You selected more threads than available samples\n" 
+        "Forcing thread to number of samples" << endl;
+         falco_config.threads = all_seq_filenames.size();
     }
-  }
-  catch (const runtime_error &e) {
+
+    // if single threaded, just launch the function with all the files
+    if (falco_config.threads == 1){
+        processFile(falco_config, all_seq_filenames, argpass_struct);
+    }else {
+         std::vector<std::vector<std::string>> fileChunks = makeChunks(all_seq_filenames, falco_config.threads);
+      // This commented out section was the basic chunk creation method, it was not balanced
+      // so the last chunk was always much bigger than the others
+      // new makeChunks now make balanced chunks for each threads
+
+      // Split the list of input files into smaller chunks (e.g., 4 chunks)
+      // std::size_t numChunks = falco_config.threads;
+      // std::size_t chunkSize = all_seq_filenames.size() / numChunks;
+      // cout << "Threads chunk size: " << chunkSize << "\n"; // DEBUGLINE
+      // return EXIT_SUCCESS; // DEBUGLINE
+      // std::vector<std::vector<std::string>> fileChunks;
+      // auto it = all_seq_filenames.begin();
+      // for (std::size_t i = 0; i < numChunks - 1; ++i) {
+      //     std::vector<std::string> chunk(it, it + chunkSize);
+      //     fileChunks.push_back(chunk);
+      //     it += chunkSize;
+      // }
+      // std::vector<std::string> lastChunk(it, all_seq_filenames.end());
+      // fileChunks.push_back(lastChunk);
+
+      // for (const auto &chunk : fileChunks){
+      //     cout << "Chunk size: " << chunk.size() << "\n";
+      // }
+
+    // Create a vector to hold threads
+       std::vector<std::thread> threads;
+    // Launch threads, each processing a chunk of input files
+       for (const auto &chunk : fileChunks) {
+           threads.push_back(std::thread([&falco_config, &chunk, &argpass_struct]() {
+                 // falco_config are passed by value so the thread use a copy of the falco_config object
+                 // and prevent race condition as the processFile function actually modify the object
+                 processFile(falco_config, chunk, argpass_struct);
+           }));
+       }
+
+       // Wait for all threads to finish their execution
+       for (auto &thread : threads) {
+           thread.join();
+       }
+    }
+    }
+    catch (const runtime_error &e) {
     cerr << e.what() << endl;
     return EXIT_FAILURE;
-  }
-  return EXIT_SUCCESS;
+   }
+    return EXIT_SUCCESS;
 }
+
