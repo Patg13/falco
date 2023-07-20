@@ -343,19 +343,19 @@ struct args_struct {
 std::vector<std::vector<std::string>> 
 makeChunks(const std::vector<std::string>& filenames, size_t numChunks) {
     // Calculate the average number of filenames per chunk
-    int averagePerChunk = filenames.size() / numChunks;
+    size_t averagePerChunk = filenames.size() / numChunks;
     // Calculate the number of chunks that will have one additional filename
-    int extraChunks = filenames.size() % numChunks;
+    size_t extraChunks = filenames.size() % numChunks;
     std::vector<std::vector<std::string>> chunks;
-    int currentIndex = 0;
-    for (int chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
-        int chunkSize = averagePerChunk;
+    size_t currentIndex = 0;
+    for (size_t chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
+        size_t chunkSize = averagePerChunk;
         // Distribute the additional filenames across the chunks
         if (chunkIndex < extraChunks) {
             chunkSize++;
         }
         std::vector<std::string> chunk;
-        for (int i = 0; i < chunkSize; i++) {
+        for (size_t i = 0; i < chunkSize; i++) {
             chunk.push_back(filenames[currentIndex]);
             currentIndex++;
         }
