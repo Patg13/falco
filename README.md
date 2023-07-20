@@ -10,19 +10,19 @@ This program is an emulation of the popular
 [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc)
 software to check large sequencing reads for common problems.
 
+NOTE FROM PATG13:
+Because I'm not a professional C++ coder, I feel my code is not clean enough
+to do a pull request on the original Falco repo
+If someone better than me want to check my code and clean it, feel free to do so
+I would be very happy to do a pull request then.
+
 Installing falco
 ================
 
 ## Installing through conda
-If you use [anaconda](https://anaconda.org) to manage your packages,
-and the `conda` binary is in your path, you can install the most
-recent release of `falco` by running
-```
-$ conda install -c bioconda falco
-```
 
-`falco` can be found inside the `bin` directory of your anaconda
-installer.
+As I'm not the original author and I don't use conda, 
+this version cannot be installed through conda
 
 ## Installing from source (code release)
 
@@ -118,12 +118,12 @@ $ falco example.fq
 
 This will generate three files in the same directory as the input fastq file:
 
-* `fastqc_data.txt` is a text file with a summary of the QC metrics
+* `example.fq_fastqc_data.txt` is a text file with a summary of the QC metrics
 
-* `fastqc_report.html` is the visual HTML report showing plots of the
+* `example.fq_fastqc_report.html` is the visual HTML report showing plots of the
    QC metrics summarized in the text summary.
 
-* `summary.txt`: A tab-separated file describing whether the
+* `example.fq_summary.txt`: A tab-separated file describing whether the
   pass/warn/fail result for each module. If multiple files are
   provided, only one summary file is generated, with one of the
   columns being the file name associated to each module result.
@@ -199,13 +199,13 @@ Options:
                            specified format. Valid formats are bam, sam, 
                            bam_mapped, sam_mapped, fastq, fq, fastq.gz 
                            or fq.gz.  
-  -t, --threads            [NOT YET IMPLEMENTED IN FALCO] Specifies the 
-                           number of files which can be processed 
-                           simultaneously. Each thread will be 
+  -t, --threads            Specifies the number of files which can be 
+                           processed simultaneously. Each thread will be 
                            allocated 250MB of memory so you shouldn't 
                            run more threads than your available memory 
                            will cope with, and not more than 6 threads 
-                           on a 32 bit machine [1] 
+                           on a 32 bit machine, should be equal or greater
+                           than the number of files [1] 
   -c, --contaminants       Specifies a non-default file which contains 
                            the list of contaminants to screen 
                            overrepresented sequences against. The file 
@@ -240,7 +240,13 @@ Options:
                            Selects a directory to be used for temporary 
                            files written when generating report images. 
                            Defaults to system temp directory if not 
-                           specified.  
+                           specified.
+  -m, -trim-seqs           [Falco only] Trim sequences on the 3'end to this
+                           length before processing. This can be useful to 
+                           reduce false positives occurences for some
+                           modules (as the end of Illumina reads are
+                           often low quality and will trigger FAIL
+                           event [0 / no trim]  
   -s, -subsample           [Falco only] makes falco faster (but 
                            possibly less accurate) by only processing 
                            reads that are multiple of this value (using 
@@ -258,20 +264,23 @@ Options:
                            HTML file.  
       -skip-summary        [Falco only] Do not create FastQC summary 
                            file  
-  -D, -data-filename       [Falco only] Specify filename for FastQC 
+  -D, -data-filename       [NOT SUPPORTED IN MTT VERSION] 
+                           Specify filename for FastQC 
                            data output (TXT). If not specified, it will 
                            be called fastq_data.txt in either the input 
                            file's directory or the one specified in the 
                            --output flag. Only available when running 
                            falco with a single input.  
-  -R, -report-filename     [Falco only] Specify filename for FastQC 
+  -R, -report-filename     [NOT SUPPORTED IN MTT VERSION] 
+                           Specify filename for FastQC 
                            report output (HTML). If not specified, it 
                            will be called fastq_report.html in either 
                            the input file's directory or the one 
                            specified in the --output flag. Only 
                            available when running falco with a single 
                            input.  
-  -S, -summary-filename    [Falco only] Specify filename for the short 
+  -S, -summary-filename    [NOT SUPPORTED IN MTT VERSION] 
+                           Specify filename for the short 
                            summary output (TXT). If not specified, it 
                            will be called fastq_report.html in either 
                            the input file's directory or the one 

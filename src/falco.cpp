@@ -623,7 +623,8 @@ int main(int argc, const char **argv) {
         "simultaneously.  Each thread will be allocated 250MB of "
         "memory so you shouldn't run more threads than your "
         "available memory will cope with, and not more than "
-        "6 threads on a 32 bit machine"
+        "6 threads on a 32 bit machine, should be equal or "
+        "greater than the number of files"
         , false, falco_config.threads);
 
     opt_parse.add_opt("-contaminants", 'c',
@@ -677,10 +678,11 @@ int main(int argc, const char **argv) {
     // ones used in FastQC, so cannot use:
     // h, v, o, j, f, t, c, a, l, k, q, d
     opt_parse.add_opt("trim-seqs", 'm',
-        "[Falco only] Trim sequences on the 3'end before processing "
-        "This can be useful to reduce false positives occurences "
-        "for some modules (as the end of Illumina reads are often "
-        "low quality and will trigger FAIL event "
+        "[Falco only] Trim sequences on the 3'end to this length "
+        "before processing. This can be useful to reduce false "
+        "positives occurences for some modules as the end of "
+        "Illumina reads are often low quality and will trigger "
+        "FAIL event"
         , false, falco_config.trim_value_3p);
 
     opt_parse.add_opt("subsample", 's',
@@ -714,21 +716,24 @@ int main(int argc, const char **argv) {
         , false, skip_short_summary);
 
     opt_parse.add_opt("data-filename", 'D',
-        "[Falco only] Specify filename for FastQC data output (TXT). "
+        "[NOT SUPPORTED IN MTT VERSION] "
+        "Specify filename for FastQC data output (TXT). "
         "If not specified, it will be called fastq_data.txt in either "
         "the input file's directory or the one specified in the --output "
         "flag. Only available when running falco with a single input. "
         , false, data_filename);
 
     opt_parse.add_opt("report-filename", 'R',
-        "[Falco only] Specify filename for FastQC report output (HTML). "
+        "[NOT SUPPORTED IN MTT VERSION] "
+        "Specify filename for FastQC report output (HTML). "
         "If not specified, it will be called fastq_report.html in either "
         "the input file's directory or the one specified in the --output "
         "flag. Only available when running falco with a single input."
         , false, report_filename);
 
     opt_parse.add_opt("summary-filename", 'S',
-        "[Falco only] Specify filename for the short summary output (TXT). "
+        "[NOT SUPPORTED IN MTT VERSION] "
+        "Specify filename for the short summary output (TXT). "
         "If not specified, it will be called fastq_report.html in either "
         "the input file's directory or the one specified in the --output "
         "flag. Only available when running falco with a single input."
