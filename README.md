@@ -1,4 +1,4 @@
-# Falco: FastQC Alternative Code
+# Falco: FastQC Alternative Code (MultiThread-Trim / MTT version)
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/smithlabcode/falco/total.svg?style=social&logo=github&label=Download)](https://github.com/smithlabcode/falco/releases/latest)
 [![DOI](https://zenodo.org/badge/214499063.svg)](https://zenodo.org/badge/latestdoi/214499063)
